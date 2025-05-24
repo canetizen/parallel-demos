@@ -251,15 +251,37 @@ Thread 0: b = 42
 #pragma omp atomic, paylaşılan tek bir değişken üzerinde basit ve kısa işlemler (örneğin x++, x += y) yapıldığında #pragma omp critical'a göre daha verimlidir çünkü daha hafif bir kilitleme mekanizması kullanır ve donanım seviyesinde optimize edilir; buna karşın critical, daha karmaşık işlemleri veya birden fazla değişkenin güncellenmesini destekler ama tüm iş parçacıklarını sıraya sokarak performansı düşürebilir, bu nedenle mümkün olan durumlarda atomic tercih edilmelidir.
 
 ### False Sharing
-**False sharing**, paralel programlamada farklı iş parçacıklarının kendi bağımsız değişkenlerine eriştiği halde, bu değişkenlerin bellekte aynı **cache line** içinde yer alması nedeniyle performans kaybı yaşanmasıdır. CPU’lar verileri cache line denilen 64 byte’lık bloklar hâlinde önbelleğe alır. Eğer iki iş parçacığı, aynı cache line'da yer alan farklı bellek konumlarını güncelliyorsa, bu işlemciler birbirlerinin cache’ini geçersiz kılar (cache invalidation), sürekli senkronizasyon oluşur ve performans ciddi şekilde düşer.
+**False sharing**, paralel programlamada birden fazla iş parçacığının (thread) **farklı bellek adreslerine** erişmesine rağmen, bu adreslerin aynı **cache line** içinde bulunması nedeniyle oluşan ciddi performans problemidir.
 
-Bu sorunu **verileri farklı cache line'lara yayarak (padding kullanarak)** çözebiliriz.
+Modern CPU'larda bellekten alınan veri L1, L2 ve L3 cache seviyelerinde tutulur:
+
+* **L1 Cache**: Her çekirdeğe özel, en küçük ama en hızlı cache seviyesidir.
+* **L2 Cache**: Genellikle her çekirdeğe özel ya da birkaç çekirdek arasında paylaşılan orta büyüklükte cache seviyesidir.
+* **L3 Cache**: CPU içindeki tüm çekirdeklerin paylaştığı, daha büyük ama daha yavaş cache seviyesidir.
+
+CPU'lar veriyi tipik olarak 64 byte'lık bloklar hâlinde (**cache line**) işler. Birden fazla çekirdek aynı cache line'daki veriye eşzamanlı yazmaya çalıştığında, CPU'lar cache tutarlılığını (**cache coherence**, örn. MESI protokolü) sağlamak için sürekli **cache invalidation** gerçekleştirir. Bu invalidation işlemleri özellikle L1 ve L2 cache seviyelerinde sıkça gerçekleştiği için ciddi performans kayıplarına sebep olur.
+
+#### Sequential Çalışmada Cache Kullanımı
+
+* Yalnızca **tek bir thread** olduğunda, veriye tek çekirdek üzerinden L1 cache'te hızlı erişilir.
+* Herhangi bir invalidation gerçekleşmez ve veri genellikle L1 veya L2 cache içerisinde kalır.
+
+#### Paralel Çalışmada Cache ve False Sharing
+
+* Farklı thread'ler farklı çekirdeklerde çalıştığında, her biri kendi L1 cache'ine sahiptir.
+* Eğer farklı çekirdeklerde çalışan thread'ler, aynı cache line içerisinde bulunan farklı değişkenlere yazma yaparsa, çekirdeklerin cache'lerinde sürekli invalidation işlemleri meydana gelir. Bu durum, çekirdeklerin cache'lerindeki verilerin sürekli geçersizleşmesine ve yeniden yüklenmesine neden olarak performansı ciddi biçimde düşürür.
+
+#### False Sharing'in Önlenmesi
+
+False sharing'i önlemek için aşağıdaki yöntemler kullanılabilir:
+
+* Bellek hizalaması: Her thread'in kullandığı veriyi farklı cache line'lara yerleştirmek.
+* Padding (dolgu verisi ekleyerek): Yapıları veya dizileri cache line sınırına hizalayarak farklı değişkenlerin farklı cache line'larda olmasını sağlamak.
+* Thread-local storage veya private değişkenler kullanarak thread'lerin birbirlerinin verilerine erişmesini önlemek.
 
 ---
 
 #### Örnek 1: False Sharing Olan Kod
-
-Bu kodda `sum[]` dizisinin elemanları bellekte bitişik tutulduğu için false sharing oluşabilir.
 
 ```c
 #include <stdio.h>
@@ -268,13 +290,13 @@ Bu kodda `sum[]` dizisinin elemanları bellekte bitişik tutulduğu için false 
 #define NUM_THREADS 4
 #define NUM_STEPS 1000000
 
-double sum[NUM_THREADS];
+double sum[NUM_THREADS]; // Tehlike burada!
 double step;
 
 int main() {
     int i, nthreads;
     double pi = 0.0;
-    step = 1.0 / (double)NUM_STEPS;
+    step = 1.0 / NUM_STEPS;
 
     omp_set_num_threads(NUM_THREADS);
 
@@ -283,6 +305,7 @@ int main() {
         int id = omp_get_thread_num();
         int nthrds = omp_get_num_threads();
         double x;
+
         if (id == 0) nthreads = nthrds;
 
         for (i = id, sum[id] = 0.0; i < NUM_STEPS; i += nthrds) {
@@ -300,14 +323,11 @@ int main() {
 }
 ```
 
-**Problemin kaynağı:**
-Tüm `sum[id]` değerleri bellekte bitişik dizildiğinden, farklı iş parçacıkları aynı cache line’ı paylaşıyor olabilir. Bu da false sharing’e neden olur.
+**Sorun:** `sum[]` dizisi bitişik bellekte tutulduğu için elemanlar aynı cache line'a denk gelebilir. Bu da farklı çekirdeklerdeki thread'lerin birbirlerinin cache'ini geçersiz kılmasına yol açar.
 
 ---
 
-#### Örnek 2: False Sharing Çözülmüş Kod (Padding Kullanılarak)
-
-Bu örnekte her iş parçacığının kullandığı veri bellekte ayrı cache line’a düşecek şekilde padding uygulanarak false sharing engellenmiştir.
+#### Örnek 2: Padding ile False Sharing Engellenmiş Kod
 
 ```c
 #include <stdio.h>
@@ -319,7 +339,7 @@ Bu örnekte her iş parçacığının kullandığı veri bellekte ayrı cache li
 
 typedef struct {
     double value;
-    char padding[CACHE_LINE_SIZE - sizeof(double)]; // padding ile hizalama
+    char padding[CACHE_LINE_SIZE - sizeof(double)];
 } PaddedDouble;
 
 PaddedDouble sum[NUM_THREADS];
@@ -328,7 +348,7 @@ double step;
 int main() {
     int i, nthreads;
     double pi = 0.0;
-    step = 1.0 / (double)NUM_STEPS;
+    step = 1.0 / NUM_STEPS;
 
     omp_set_num_threads(NUM_THREADS);
 
@@ -337,6 +357,7 @@ int main() {
         int id = omp_get_thread_num();
         int nthrds = omp_get_num_threads();
         double x;
+
         if (id == 0) nthreads = nthrds;
 
         for (i = id, sum[id].value = 0.0; i < NUM_STEPS; i += nthrds) {
@@ -353,10 +374,6 @@ int main() {
     return 0;
 }
 ```
-
-**Çözüm:**
-Her `sum[i].value` değeri bellekte farklı bir cache line’a denk gelir, böylece iş parçacıkları birbirlerinin önbelleğine müdahale etmez. Performans kaybı önlenmiş olur.
+**Çözüm:** `sum[i].value`'lar ayrı cache line’lara hizalanmıştır. Böylece her thread'in eriştiği veri, diğerlerinden bağımsız olur ve false sharing engellenir.
 
 ---
-#### critical ve atomic İle Çözüm
-Bazı durumlarda, özellikle sık sık yazılan ortak bir veri varsa, critical kullanılarak da çözülebilir fakat bu yöntem performansı düşürür, çünkü iş parçacıkları sırayla çalışmak zorunda kalır.
