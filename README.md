@@ -20,7 +20,7 @@ Each project is located in the `src/` directory, and the repository includes a v
   * [mpi\_maze\_solver](#mpi\_maze\_solver) 
   * [omp\_gauss\_jordan\_elimination](#omp\_gauss\_jordan\_elimination) 
   * [mpi\_naive\_string\_matcher](#mpi\_naive\_string\_matcher) 
-  * [omp\_bitonic\_sort](#mpi\_bitonic\_sort) 
+  * [omp\_bitonic\_sort](#omp\_bitonic\_sort) 
 
 ---
 
