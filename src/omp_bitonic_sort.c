@@ -1,6 +1,6 @@
 /*
  * Author: canetizen
- * Created on Sat May 23 2025
+ * Created on Fri May 23 2025
  * Description: Iterative Bitonic Sort using OpenMP.
  */
 

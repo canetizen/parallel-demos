@@ -12,14 +12,17 @@ Each project is located in the `src/` directory, and the repository includes a v
 * [Build and Run Instructions](#build-and-run-instructions)
 * [Projects](#projects)
 
+  * [character\_counter\_ipc](#character\_counter\_ipc)
   * [mpi\_snake\_in\_the\_box](#mpi\_snake\_in\_the\_box)
   * [mpi\_space\_cleaner](#mpi\_space\_cleaner)
   * [mpi\_file\_space\_cleaner](#mpi\_file\_space\_cleaner) 
   * [mpi\_hypercube\_broadcast-and-mpi\_hypercube\_reduce](#mpi\_hypercube\_broadcast-and-mpi\_hypercube\_reduce) 
-  * [omp\_pi\_estimation](#omp\_pi\_estimation) 
   * [mpi\_maze\_solver](#mpi\_maze\_solver) 
+  * [mpi\_naive\_string\_matcher](#mpi\_naive\_string\_matcher)
+  * [mpi\_sum\_first\_n\_number](#mpi\_sum\_first\_n\_number)
+  * [mpi\_remove\_zeros](#mpi\_remove\_zeros)
   * [omp\_gauss\_jordan\_elimination](#omp\_gauss\_jordan\_elimination) 
-  * [mpi\_naive\_string\_matcher](#mpi\_naive\_string\_matcher) 
+  * [omp\_pi\_estimation](#omp\_pi\_estimation) 
   * [omp\_bitonic\_sort](#omp\_bitonic\_sort) 
 
 ---
@@ -467,4 +470,116 @@ Sorted array:
 4 10 11 20 21 30 110 330
 ```
 
+---
+
+### character\_counter\_ipc
+
+**Description:**
+A multi-process character frequency counter that demonstrates **interprocess communication (IPC)** using **pipes** in a Unix environment. The input string is divided into equal segments, and each child process counts the frequency of characters in its assigned segment. Results are communicated back to the parent process using **`pipe()`**, and aggregated into a final count.
+
+This project uses key Unix system calls:
+
+* `fork()` to create parallel processes
+* `pipe()`, `read()`, and `write()` for interprocess communication
+* `wait()` to synchronize parent and children
+
+---
+
+**How to Build:**
+
+```sh
+make build TARGET=character_counter_ipc
+```
+
+**How to Run:**
+
+```sh
+make run TARGET=character_counter_ipc
+```
+
+**Output Example:**
+
+```
+Character ' ' (32) => 41 times
+Character '.' (46) => 5 times
+Character 'A' (65) => 1 times
+Character 'B' (66) => 1 times
+Character 'K' (75) => 3 times
+Character 'M' (77) => 1 times
+Character 'O' (79) => 1 times
+Character 'T' (84) => 2 times
+Character 'a' (97) => 36 times
+Character 'c' (99) => 8 times
+...
+```
+---
+
+### mpi\_sum\_first\_n\_number
+
+**Description:**
+A minimal MPI demo that computes the sum of the first `n` positive integers using only `MPI_Scatter` and `MPI_Gather`. The problem is evenly divided among `p` processes, where each process receives its assigned starting point and chunk size, computes the local sum, and sends it back to the root process.
+
+* The root process (`rank 0`) prepares `[start, chunk]` pairs for each process and scatters them.
+* Each process computes the sum of `chunk` consecutive integers starting from `start`.
+* The root process gathers all local sums and prints the final result.
+
+---
+
+**How to Build:**
+
+```sh
+make build TARGET=mpi_sum_first_n_number
+```
+
+**How to Run:**
+
+```sh
+make run TARGET=mpi_sum_first_n_number np=<number_of_processes> args="<n>"
+```
+
+* `n` must be divisible by the number of processes (`np`).
+* Example with 4 MPI processes:
+
+```sh
+make run TARGET=mpi_sum_first_n_number np=4 args="100"
+```
+
+**Output Example:**
+
+```
+Sum of the first 100 positive integers is 5050
+```
+
+---
+### mpi\_remove\_zeros
+
+**Description:**
+A parallel MPI program that removes zeros from a given integer array. Each process receives a chunk of the array using `MPI_Scatter`, filters out zero elements, and reports their `(index, value)` pairs. The root process (`rank 0`) gathers fixed-length buffers from all processes using `MPI_Gather`, filters out invalid entries, and prints the final result.
+
+* Only `MPI_Scatter` and `MPI_Gather` are used.
+* Indexes refer to positions in the original array.
+
+---
+
+**How to Build:**
+
+```sh
+make build TARGET=mpi_remove_zeros
+```
+
+**How to Run:**
+
+```sh
+make run TARGET=mpi_remove_zeros np=<number_of_processes>
+```
+
+* The array size is fixed to 10 elements inside the source code.
+* `np` must evenly divide the array size (e.g., 2, 5, or 10).
+
+**Output Example:**
+
+```
+Index-Value pairs (non-zero elements):
+0,5 1,4 5,1 8,2
+```
 ---
