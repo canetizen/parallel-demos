@@ -1,6 +1,5 @@
 # parallel-demos
 
-**Description:**
 A collection of example projects demonstrating parallel computing concepts and tools (such as MPI, OpenMP, etc.).
 Each project is located in the `src/` directory, and the repository includes a versatile Makefile that automatically detects the use of MPI and compiles/runs each project accordingly.
 

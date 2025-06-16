@@ -1,56 +1,78 @@
 /*
  * Author: canetizen
  * Created on Fri May 23 2025
- * Description: Iterative Bitonic Sort using OpenMP.
+ * Description: Recursive Bitonic Sort using OpenMP.
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <omp.h>
 
-// Compare and swap two elements if they are out of order based on dir (1 = ascending, 0 = descending)
-void compare_and_swap(int* arr, int i, int j, int dir) {
-    if ((dir && arr[i] > arr[j]) || (!dir && arr[i] < arr[j])) {
-        int temp = arr[i];
-        arr[i] = arr[j];
-        arr[j] = temp;
+#define ASCENDING 1
+#define DESCENDING 0
+
+void swap(int *a, int *b) {
+    int tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
+void bitonic_merge(int *arr, int low, int cnt, int dir) {
+    if (cnt > 1) {
+        int k = cnt / 2;
+
+        #pragma omp parallel for
+        for (int i = low; i < low + k; i++) {
+            if ((dir == ASCENDING && arr[i] > arr[i + k]) || (dir == DESCENDING && arr[i] < arr[i + k])) {
+                swap(&arr[i], &arr[i + k]);
+            }
+        }
+
+
+        bitonic_merge(arr, low, k, dir);
+        bitonic_merge(arr, low + k, k, dir);
+    }
+
+}
+
+void bitonic_sort(int *arr, int low, int cnt, int dir) {
+    if (cnt > 1) {
+        int k = cnt / 2;
+
+        bitonic_sort(arr, low, k, ASCENDING);
+        bitonic_sort(arr, low + k, k, DESCENDING);
+
+        bitonic_merge(arr, low, cnt, dir);
     }
 }
 
-// Iterative Bitonic Sort
-void bitonic_sort_iterative(int* arr, int n, int dir) {
-    for (int size = 2; size <= n; size <<= 1) {
-        for (int stride = size >> 1; stride > 0; stride >>= 1) {
-            // Parallel compare and swap within each stage
-            #pragma omp parallel for
-            for (int i = 0; i < n; i++) {
-                int j = i ^ stride;  // Paired index using XOR trick
-                if (j > i) {
-                    int same_block = (i & size) == (j & size); // Ensure both in same block
-                    int direction = ((i & size) == 0) ? dir : !dir; // Asc/desc based on bit
-                    if (same_block) {
-                        compare_and_swap(arr, i, j, direction);
-                    }
-                }
-            }
-        }
-    }
+void parallel_bitonic_sort(int *arr, int n, int dir) {
+    bitonic_sort(arr, 0, n, dir);
+}
+
+void print_array(int *arr, int n) {
+    for (int i = 0; i < n; i++)
+        printf("%d ", arr[i]);
+    printf("\n");
 }
 
 int main() {
-    // Example array (must be power of 2 in length)
-    int arr[] = {10, 30, 11, 20, 4, 330, 21, 110};
+    int arr[] = {3, 7, 4, 8, 6, 2, 1, 5};
     int n = sizeof(arr) / sizeof(arr[0]);
 
-    // Bitonic sort in ascending order
-    bitonic_sort_iterative(arr, n, 1);
-
-    // Output result
-    printf("Sorted array:\n");
-    for (int i = 0; i < n; i++) {
-        printf("%d ", arr[i]);
+    // n must be a power of 2
+    if ((n & (n - 1)) != 0) {
+        printf("Array size must be a power of 2.\n");
+        return 1;
     }
-    printf("\n");
+
+    printf("Original array:\n");
+    print_array(arr, n);
+
+    parallel_bitonic_sort(arr, n, ASCENDING);
+
+    printf("Sorted array:\n");
+    print_array(arr, n);
 
     return 0;
 }
